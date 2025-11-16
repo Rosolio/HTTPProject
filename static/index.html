@@ -47,10 +47,21 @@
             border-radius: 5px;
             font-weight: bold;
         }
+        /* 图片样式（可选，控制大小和边框） */
+        .logo {
+            width: 200px; /* 图片宽度 */
+            height: auto; /* 保持宽高比 */
+            margin: 20px 0; /* 上下边距 */
+            border: 1px solid #eee; /* 灰色边框 */
+            border-radius: 5px; /* 圆角 */
+        }
     </style>
 </head>
 <body>
 <div class="container">
+    <!-- 引用图片 -->
+    <img src="njuLOGO.png" alt="南京大学LOGO" class="logo">
+
     <h1>欢迎访问 HTTP 服务器测试页面</h1>
     <p>这是一个静态 HTML 文件，用于测试服务器是否能正确返回静态资源。</p>
 

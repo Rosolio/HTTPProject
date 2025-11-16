@@ -21,9 +21,9 @@ public class RequestHandler implements Runnable {
     public void run() {
         // 1. 将 headers 定义在 try 外部，并初始化默认值
         Map<String, String> headers = new HashMap<>();
-        BufferedReader in = null;
-        PrintWriter out = null;
-        OutputStream dataOut = null;
+//        BufferedReader in = null;
+//        PrintWriter out = null;
+//        OutputStream dataOut = null;
 
         try {
             // 初始化输入输出流
@@ -189,6 +189,11 @@ public class RequestHandler implements Runnable {
 
     // 构建并发送HTTP响应
     private void sendResponse(String protocol, int statusCode, String statusMsg, String mimeType, String body) {
+        // 增加空指针判断
+        if (out == null) {
+            System.err.println("PrintWriter is null, cannot send response");
+            return;
+        }
         // 1. 响应状态行
         StringBuilder response = new StringBuilder();
         response.append(protocol).append(" ").append(statusCode).append(" ").append(statusMsg).append("\r\n");
