@@ -14,9 +14,13 @@ HTTPProject/
 │   │   ├── MimeUtils.java        # MIME 类型工具类
 │   ├── client/           # HTTP 客户端相关类
 │   │   ├── HttpClient.java       # 客户端主类，支持发送GET/POST请求
-│   ├── common/
+│   ├── common/           # 公共模块（预留）
+├── static/               # 静态资源目录
+│   ├── index.html        # 测试页面
+│   ├── njuLOGO.png       # 测试png格式
 ├── .gitignore            # Git 忽略文件配置
 ├── .idea/                # IDEA 项目配置
+└── readme.md             # 项目说明文档
 ```
 
 ## 功能说明
