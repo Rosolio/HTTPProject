@@ -86,9 +86,4 @@ HTTPProject/
    请输入URL (例如: http://localhost:8080/index.html): http://localhost:8080/login
    请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
    ```
-
-## 注意事项
-1. 静态资源需放在项目根目录下的 `static` 文件夹中
-2. 用户数据存储在内存中，服务器重启后数据会丢失
-3. 客户端与服务器通信默认使用短连接，服务器支持长连接
-4. 支持的 MIME 类型包括：html、txt、jpg、png，其他类型默认使用 `application/octet-stream`
+   
