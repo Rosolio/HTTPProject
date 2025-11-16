@@ -12,11 +12,9 @@ HTTPProject/
 │   │   ├── RequestHandler.java   # 处理客户端请求的核心类
 │   │   ├── UserService.java      # 用户注册登录服务（内存存储）
 │   │   ├── MimeUtils.java        # MIME 类型工具类
-│   │   ├── HttpResponse.java     # 响应相关（预留）
 │   ├── client/           # HTTP 客户端相关类
 │   │   ├── HttpClient.java       # 客户端主类，支持发送GET/POST请求
-│   ├── common/           # 公共常量（预留）
-│   │   ├── HttpConstants.java
+│   ├── common/
 ├── .gitignore            # Git 忽略文件配置
 ├── .idea/                # IDEA 项目配置
 ```
