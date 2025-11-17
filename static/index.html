@@ -46,6 +46,28 @@
             background-color: #0056b3;
         }
 
+        /* 新增：区分不同功能按钮的样式 */
+        .btn-register {
+            background-color: #28a745;
+        }
+        .btn-register:hover {
+            background-color: #218838;
+        }
+
+        .btn-login {
+            background-color: #17a2b8;
+        }
+        .btn-login:hover {
+            background-color: #138496;
+        }
+
+        .btn-redirect {
+            background-color: #ffc107;
+        }
+        .btn-redirect:hover {
+            background-color: #e0a800;
+        }
+
         .status {
             margin-top: 30px;
             padding: 15px;
@@ -62,7 +84,6 @@
             border-radius: 5px;
         }
 
-        /* 新增：文本文件展示样式 */
         .text-container {
             margin: 30px 0;
             padding: 20px;
@@ -78,6 +99,11 @@
             margin-bottom: 10px;
             font-size: 1.2em;
         }
+
+        /* 新增：按钮分组样式 */
+        .btn-group {
+            margin: 15px 0;
+        }
     </style>
 </head>
 <body>
@@ -87,23 +113,36 @@
     <h1>欢迎访问 HTTP 服务器测试页面</h1>
     <p>这是一个静态 HTML 文件，用于测试服务器是否能正确返回静态资源。</p>
 
-    <!-- 新增：test.txt 访问链接 -->
-    <a href="test.txt" class="btn">查看 test.txt 文件</a>
+    <!-- 静态资源测试区 -->
+    <div class="btn-group">
+        <h3>静态资源测试</h3>
+        <a href="test.txt" class="btn">查看 test.txt 文件</a>
+        <a href="/index.html" class="btn">刷新当前页面</a>
+        <a href="/about.html" class="btn">访问不存在的页面（测试404）</a>
+    </div>
 
-    <!-- 测试链接 -->
-    <a href="/index.html" class="btn">刷新当前页面</a>
-    <a href="/about.html" class="btn">访问不存在的页面（测试404）</a>
+    <!-- 新增：用户功能区 -->
+    <div class="btn-group">
+        <h3>用户功能测试</h3>
+        <a href="register.html" class="btn btn-register">用户注册页面</a>
+        <a href="login.html" class="btn btn-login">用户登录页面</a>
+    </div>
+
+    <!-- 新增：重定向测试区 -->
+    <div class="btn-group">
+        <h3>重定向测试</h3>
+        <a href="/old" class="btn btn-redirect">测试301永久重定向（/old）</a>
+        <a href="/temp" class="btn btn-redirect">测试302临时重定向（/temp）</a>
+    </div>
+
     <div class="status">服务器状态：运行中</div>
-</div>
-
+</div> <!-- 关键修复：闭合 container div -->
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // 原有时间显示逻辑
         const now = new Date();
         const timeStr = now.toLocaleString();
         document.querySelector('.status').textContent += `（最后更新：${timeStr}）`;
 
-        // 原有按钮点击事件
         document.querySelectorAll('.btn').forEach(btn => {
             btn.addEventListener('click', function (e) {
                 if (this.textContent.includes('不存在')) {

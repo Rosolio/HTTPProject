@@ -109,6 +109,24 @@ public class HttpClient {
         return new UrlInfo(host, port, path);
     }
 
+    // 新增一个重载方法，用于处理相对路径（基于当前URL的主机和端口）
+    private static UrlInfo parseUrl(String url, UrlInfo currentUrl) {
+        // 如果是相对路径（不以http://开头），则基于当前URL补全
+        if (!url.startsWith("http://")) {
+            String fullUrl;
+            if (url.startsWith("/")) {
+                // 绝对路径（相对于主机）：/new.html → http://当前主机:端口/new.html
+                fullUrl = "http://" + currentUrl.host + ":" + currentUrl.port + url;
+            } else {
+                // 相对路径（相对于当前路径）：暂不处理，简化为绝对路径逻辑
+                fullUrl = "http://" + currentUrl.host + ":" + currentUrl.port + "/" + url;
+            }
+            return parseUrl(fullUrl);
+        }
+        // 否则按原逻辑解析完整URL
+        return parseUrl(url);
+    }
+
     // 发送HTTP请求并处理响应（包含重定向逻辑）
     private static void sendRequest(String method, UrlInfo urlInfo, String body) throws IOException {
         int redirectCount = 0;
@@ -184,7 +202,7 @@ public class HttpClient {
                         return;
                     }
                     System.out.println("重定向到: " + location);
-                    UrlInfo newUrl = parseUrl(location);
+                    UrlInfo newUrl = parseUrl(location, currentUrl);
                     if (newUrl == null) {
                         System.out.println("重定向URL格式错误: " + location);
                         return;
