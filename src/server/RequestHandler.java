@@ -63,7 +63,7 @@ public class RequestHandler implements Runnable {
 
         } catch (Exception e) {
             // 500 服务器内部错误
-            sendResponse("HTTP/1.1", 500, "Internal Server Error", "text/plain", "Server Error: " + e.getMessage());
+            sendResponse("HTTP/1.1", 500, "Internal Server Error", "text/plain", "Server Error: " + e.getMessage(), -1);
         } finally {
             try {
                 // 长连接判断：此时 headers 已在外部初始化，可安全访问
@@ -117,18 +117,20 @@ public class RequestHandler implements Runnable {
 
     // 处理注册：解析表单（username=xxx&password=xxx），内存存储用户
     private void handleRegister(String body) {
+        //test code 500
+        //throw new RuntimeException("This is a test for 500 Internal Server Error!");
         Map<String, String> params = parseFormParams(body);
         String username = params.get("username");
         String password = params.get("password");
 
         if (username == null || password == null || username.isEmpty() || password.isEmpty()) {
-            sendResponse("HTTP/1.1", 400, "Bad Request", "text/plain", "Username and Password are required");
+            sendResponse("HTTP/1.1", 400, "Bad Request", "text/plain", "Username and Password are required", -1);
             return;
         }
         if (userService.register(username, password)) {
-            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "Register Success: " + username);
+            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "Register Success: " + username, -1);
         } else {
-            sendResponse("HTTP/1.1", 409, "Conflict", "text/plain", "Username already exists: " + username);
+            sendResponse("HTTP/1.1", 409, "Conflict", "text/plain", "Username already exists: " + username, -1);
         }
     }
 
@@ -139,9 +141,9 @@ public class RequestHandler implements Runnable {
         String password = params.get("password");
 
         if (userService.login(username, password)) {
-            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "Login Success: Welcome " + username);
+            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "Login Success: Welcome " + username, -1);
         } else {
-            sendResponse("HTTP/1.1", 401, "Unauthorized", "text/plain", "Login Failed: Invalid username or password");
+            sendResponse("HTTP/1.1", 401, "Unauthorized", "text/plain", "Login Failed: Invalid username or password", -1);
         }
     }
 
@@ -149,7 +151,7 @@ public class RequestHandler implements Runnable {
     private void handleStaticResource(String method, String path, String protocol, Map<String, String> headers) throws IOException {
         // 只支持GET请求获取静态资源，其他方法返回405
         if (!"GET".equals(method)) {
-            sendResponse(protocol, 405, "Method Not Allowed", "text/plain", "Method " + method + " Not Allowed");
+            sendResponse(protocol, 405, "Method Not Allowed", "text/plain", "Method " + method + " Not Allowed", -1);
             return;
         }
 
@@ -161,21 +163,30 @@ public class RequestHandler implements Runnable {
 
         // 404：资源不存在
         if (!resourceFile.exists() || !resourceFile.isFile()) {
-            sendResponse(protocol, 404, "Not Found", "text/plain", "Resource Not Found: " + path);
+            sendResponse(protocol, 404, "Not Found", "text/plain", "Resource Not Found: " + path, -1);
             return;
         }
 
         // 304：资源未修改（根据If-Modified-Since判断）
         String ifModifiedSince = headers.get("If-Modified-Since");
         long lastModified = resourceFile.lastModified();
-        if (ifModifiedSince != null && lastModified <= Long.parseLong(ifModifiedSince)) {
-            sendResponse(protocol, 304, "Not Modified", null, null);
-            return;
+        if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
+            try {
+                long clientLastModified = Long.parseLong(ifModifiedSince); // 直接转毫秒
+                if (lastModified <= clientLastModified) {
+                    sendResponse(protocol, 304, "Not Modified", null, null, -1);
+                    return;
+                }
+            } catch (NumberFormatException e) {
+                // 客户端传的不是数字，忽略缓存逻辑
+                System.err.println("Invalid If-Modified-Since (not a number): " + ifModifiedSince);
+            }
         }
+
 
         // 200：返回资源（带MIME类型、Last-Modified头）
         String mimeType = MimeUtils.getMimeType(path);
-        sendResponse(protocol, 200, "OK", mimeType, null);
+        sendResponse(protocol, 200, "OK", mimeType, null, lastModified); // 传入lastModified
         // 写入资源文件内容
         try (FileInputStream fis = new FileInputStream(resourceFile)) {
             byte[] buffer = new byte[1024];
@@ -188,7 +199,7 @@ public class RequestHandler implements Runnable {
     }
 
     // 构建并发送HTTP响应
-    private void sendResponse(String protocol, int statusCode, String statusMsg, String mimeType, String body) {
+    private void sendResponse(String protocol, int statusCode, String statusMsg, String mimeType, String body, long lastModified) {
         // 增加空指针判断
         if (out == null) {
             System.err.println("PrintWriter is null, cannot send response");
@@ -207,9 +218,10 @@ public class RequestHandler implements Runnable {
             response.append("Content-Length: ").append(body.getBytes().length).append("\r\n");
         }
         // 静态资源添加Last-Modified头（用于304判断）
-        if (statusCode == 200 && mimeType != null && !mimeType.startsWith("text/plain")) {
-            response.append("Last-Modified: ").append(System.currentTimeMillis()).append("\r\n");
+        if (lastModified != -1) {
+            response.append("Last-Modified: ").append(lastModified).append("\r\n"); // 纯数字毫秒
         }
+
 
         // 3. 空行（分隔头与体）
         response.append("\r\n");
