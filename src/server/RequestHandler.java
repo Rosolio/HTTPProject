@@ -21,9 +21,6 @@ public class RequestHandler implements Runnable {
     public void run() {
         // 1. 将 headers 定义在 try 外部，并初始化默认值
         Map<String, String> headers = new HashMap<>();
-//        BufferedReader in = null;
-//        PrintWriter out = null;
-//        OutputStream dataOut = null;
 
         try {
             // 初始化输入输出流

@@ -4,7 +4,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 public class HttpServer {
-    private static final int PORT = 8080; // 监听端口
+    private static final int PORT = 8007; // 监听端口
     private static final UserService userService = new UserService(); // 内存用户服务
 
     public static void main(String[] args) {

@@ -78,7 +78,7 @@ HTTPProject/
 #### 2. 专项状态码处理（301/302/304）
 - **301/302 重定向处理**：
    1. 检测到响应状态码为 301/302 时，提取响应头 `Location` 字段；
-   2. 若 `Location` 为相对路径（如 `/new.html`），自动基于当前请求的主机和端口补全为完整 URL（如 `http://localhost:8080/new.html`）；
+   2. 若 `Location` 为相对路径（如 `/new.html`），自动基于当前请求的主机和端口补全为完整 URL（如 `http://localhost:8007/new.html`）；
    3. 重新向新 URL 发送请求，限制最大重定向次数为 3 次（避免无限循环）。
 - **304 未修改处理**：
    - 检测到 304 状态码时，直接输出“资源未修改，使用本地缓存”，终止后续请求流程，不重新获取响应体。
@@ -94,7 +94,7 @@ HTTPProject/
 ## 使用方法
 ### 一、启动服务器
 1. 运行 `server.HttpServer` 类的 `main` 方法；
-2. 服务器默认在 8080 端口启动，控制台输出 “HTTP Server started on port: 8080” 表示启动成功。
+2. 服务器默认在 8007 端口启动，控制台输出 “HTTP Server started on port: 8007” 表示启动成功。
 
 ### 二、使用客户端
 1. 运行 `client.HttpClient` 类的 `main` 方法；
@@ -102,12 +102,12 @@ HTTPProject/
    - 示例1（GET 请求静态资源）：
      ```
      请输入请求方法 (GET/POST): GET
-     请输入URL (例如: http://localhost:8080/index.html): http://localhost:8080/index.html
+     请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/index.html
      ```
    - 示例2（POST 请求注册接口）：
      ```
      请输入请求方法 (GET/POST): POST
-     请输入URL (例如: http://localhost:8080/index.html): http://localhost:8080/register
+     请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
      请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
      ```
 
@@ -116,7 +116,7 @@ HTTPProject/
 ### 1. 访问静态资源（200 成功 / 304 缓存）
 - **首次请求**（返回 200）：
   ```
-  发送请求到: http://localhost:8080/test.txt
+  发送请求到: http://localhost:8007/test.txt
   === 响应结果 ===
   状态码: 200 OK
   响应头: {Connection=keep-alive, Last-Modified=1763360580370, Content-Type=text/plain; charset=UTF-8}
@@ -125,7 +125,7 @@ HTTPProject/
   ```
 - **再次请求**（返回 304）：
   ```
-  发送请求到: http://localhost:8080/test.txt
+  发送请求到: http://localhost:8007/test.txt
   === 响应结果 ===
   状态码: 304 Not Modified
   响应头: {Connection=keep-alive}
@@ -135,7 +135,7 @@ HTTPProject/
 ### 2. 用户注册与登录
 - **注册成功**：
   ```
-  发送请求到: http://localhost:8080/register
+  发送请求到: http://localhost:8007/register
   === 响应结果 ===
   状态码: 200 OK
   响应头: {Connection=keep-alive, Content-Length=22, Content-Type=text/plain}
@@ -144,7 +144,7 @@ HTTPProject/
   ```
 - **登录成功**：
   ```
-  发送请求到: http://localhost:8080/login
+  发送请求到: http://localhost:8007/login
   === 响应结果 ===
   状态码: 200 OK
   响应头: {Connection=keep-alive, Content-Length=27, Content-Type=text/plain}
@@ -155,12 +155,12 @@ HTTPProject/
 ### 3. 重定向测试（301 / 302）
 - **301 永久重定向**：
   ```
-  发送请求到: http://localhost:8080/old
+  发送请求到: http://localhost:8007/old
   === 响应结果 ===
   状态码: 301 Moved Permanently
   响应头: {Connection=keep-alive, Location=/new.html}
   重定向到: /new.html
-  发送请求到: http://localhost:8080/new.html
+  发送请求到: http://localhost:8007/new.html
   === 响应结果 ===
   状态码: 200 OK
   响应头: {Connection=keep-alive, Last-Modified=1763359661810, Content-Type=text/html; charset=UTF-8}
@@ -168,12 +168,12 @@ HTTPProject/
   ```
 - **302 临时重定向**：
   ```
-  发送请求到: http://localhost:8080/temp
+  发送请求到: http://localhost:8007/temp
   === 响应结果 ===
   状态码: 302 Found
   响应头: {Connection=keep-alive, Location=/temp-new.html}
   重定向到: /temp-new.html
-  发送请求到: http://localhost:8080/temp-new.html
+  发送请求到: http://localhost:8007/temp-new.html
   === 响应结果 ===
   状态码: 200 OK
   响应体:...（temp-new.html 页面内容）
@@ -182,21 +182,21 @@ HTTPProject/
 ### 4. 错误状态码测试（404 / 405 / 500）
 - **404 资源不存在**：
   ```
-  发送请求到: http://localhost:8080/nonexist.html
+  发送请求到: http://localhost:8007/nonexist.html
   === 响应结果 ===
   状态码: 404 Not Found
   响应体: Resource Not Found: /nonexist.html
   ```
 - **405 方法不允许**：
   ```
-  发送请求到: http://localhost:8080/test.txt
+  发送请求到: http://localhost:8007/test.txt
   === 响应结果 ===
   状态码: 405 Method Not Allowed
   响应体: Method POST Not Allowed
   ```
 - **500 服务器内部错误**（模拟接口抛异常）：
   ```
-  发送请求到: http://localhost:8080/register
+  发送请求到: http://localhost:8007/register
   === 响应结果 ===
   状态码: 500 Internal Server Error
   响应体: Server Error: This is a test for 500 Internal Server Error!
