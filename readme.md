@@ -112,95 +112,164 @@ HTTPProject/
      ```
 
 
-## 示例操作（验证核心功能）
-### 1. 访问静态资源（200 成功 / 304 缓存）
-- **首次请求**（返回 200）：
-  ```
-  发送请求到: http://localhost:8007/test.txt
-  === 响应结果 ===
-  状态码: 200 OK
-  响应头: {Connection=keep-alive, Last-Modified=1763360580370, Content-Type=text/plain; charset=UTF-8}
-  响应体:
-  MAN WHAT CAN I SAY MAMBA OUT
-  ```
-- **再次请求**（返回 304）：
-  ```
-  发送请求到: http://localhost:8007/test.txt
-  === 响应结果 ===
-  状态码: 304 Not Modified
-  响应头: {Connection=keep-alive}
-  响应体: 资源未修改，使用本地缓存
-  ```
+### 示例操作
 
-### 2. 用户注册与登录
-- **注册成功**：
-  ```
-  发送请求到: http://localhost:8007/register
-  === 响应结果 ===
-  状态码: 200 OK
-  响应头: {Connection=keep-alive, Content-Length=22, Content-Type=text/plain}
-  响应体:
-  Register Success: test
-  ```
-- **登录成功**：
-  ```
-  发送请求到: http://localhost:8007/login
-  === 响应结果 ===
-  状态码: 200 OK
-  响应头: {Connection=keep-alive, Content-Length=27, Content-Type=text/plain}
-  响应体:
-  Login Success: Welcome test
-  ```
+1. **访问静态资源（200/304）**
+   ```
+   请输入请求方法 (GET/POST): GET
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/index.html
+   ```
+   客户端预期输出：
+   ```
+   发送请求到: http://localhost:8007/test.txt
 
-### 3. 重定向测试（301 / 302）
-- **301 永久重定向**：
-  ```
-  发送请求到: http://localhost:8007/old
-  === 响应结果 ===
-  状态码: 301 Moved Permanently
-  响应头: {Connection=keep-alive, Location=/new.html}
-  重定向到: /new.html
-  发送请求到: http://localhost:8007/new.html
-  === 响应结果 ===
-  状态码: 200 OK
-  响应头: {Connection=keep-alive, Last-Modified=1763359661810, Content-Type=text/html; charset=UTF-8}
-  响应体:...（new.html 页面内容）
-  ```
-- **302 临时重定向**：
-  ```
-  发送请求到: http://localhost:8007/temp
-  === 响应结果 ===
-  状态码: 302 Found
-  响应头: {Connection=keep-alive, Location=/temp-new.html}
-  重定向到: /temp-new.html
-  发送请求到: http://localhost:8007/temp-new.html
-  === 响应结果 ===
-  状态码: 200 OK
-  响应体:...（temp-new.html 页面内容）
-  ```
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Last-Modified=1763360580370, Content-Type=text/plain; charset=UTF-8}
+   响应体:
+   MAN WHAT CAN I SAY MAMBA OUT
+   ```
+   再次发送相同请求，触发304，预期输出：
+   ```
+   发送请求到: http://localhost:8007/test.txt
 
-### 4. 错误状态码测试（404 / 405 / 500）
-- **404 资源不存在**：
-  ```
-  发送请求到: http://localhost:8007/nonexist.html
-  === 响应结果 ===
-  状态码: 404 Not Found
-  响应体: Resource Not Found: /nonexist.html
-  ```
-- **405 方法不允许**：
-  ```
-  发送请求到: http://localhost:8007/test.txt
-  === 响应结果 ===
-  状态码: 405 Method Not Allowed
-  响应体: Method POST Not Allowed
-  ```
-- **500 服务器内部错误**（模拟接口抛异常）：
-  ```
-  发送请求到: http://localhost:8007/register
-  === 响应结果 ===
-  状态码: 500 Internal Server Error
-  响应体: Server Error: This is a test for 500 Internal Server Error!
-  ```
+   === 响应结果 ===
+   状态码: 304 Not Modified
+   响应头: {Connection=keep-alive}
+   响应体: 资源未修改，使用本地缓存
+   ```
+2. **用户注册**
+   ```
+   请输入请求方法 (GET/POST): POST
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
+   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   ```
+   客户端预期输出：
+   ```
+   发送请求到: http://localhost:8007/register
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Content-Length=22, Content-Type=text/plain}
+   响应体:
+   Register Success: test
+   ```
+3. **用户登录**
+   ```
+   请输入请求方法 (GET/POST): POST
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/login
+   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   ```
+   客户端预期输出：
+   ```
+   发送请求到: http://localhost:8007/login
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Content-Length=27, Content-Type=text/plain}
+   响应体:
+   Login Success: Welcome test
+   ```
+
+4. **测试重定向（301/302）**
+
+   ```
+   //301
+   请输入请求方法 (GET/POST): GET
+   请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/old
+   ```
+   预期输出：
+   ```
+   发送请求到: http://localhost:8007/old
+
+   === 响应结果 ===
+   状态码: 301 Moved Permanently
+   响应头: {Connection=keep-alive, Location=/new.html}
+   重定向到: /new.html
+
+   发送请求到: http://localhost:8007/new.html
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Last-Modified=1763359661810, Content-Type=text/html; charset=UTF-8}
+   响应体:...
+   ```
+   ```
+   //302
+   请输入请求方法 (GET/POST): GET
+   请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/temp
+   ```
+   预期输出：
+   ```
+   发送请求到: http://localhost:8007/temp
+
+   === 响应结果 ===
+   状态码: 302 Found
+   响应头: {Connection=keep-alive, Location=/temp-new.html}
+   重定向到: /temp-new.html
+
+   发送请求到: http://localhost:8007/temp-new.html
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Last-Modified=1763359711484, Content-Type=text/html; charset=UTF-8}
+   响应体:...
+   ```
+5. **访问不存在页面（404）**
+   ```
+   请输入请求方法 (GET/POST): GET
+   请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/nonexist.html
+   ```
+   客户端预期结果：
+   ```
+   发送请求到: http://localhost:8007/nonexist.html
+
+   === 响应结果 ===
+   状态码: 404 Not Found
+   响应头: {Connection=keep-alive, Content-Length=34, Content-Type=text/plain}
+   响应体:
+   Resource Not Found: /nonexist.html
+   ```
+6. **使用不支持的方法（405）**
+   ```
+   请输入请求方法 (GET/POST): POST
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/test.txt
+   请输入POST参数 (格式: username=xxx&password=xxx): username=xxx&password=xxx
+   ```
+   客户端预期结果：
+   ```
+   发送请求到: http://localhost:8007/test.txt
+
+   === 响应结果 ===
+   状态码: 405 Method Not Allowed
+   响应头: {Connection=keep-alive, Content-Length=23, Content-Type=text/plain}
+   响应体:
+   Method POST Not Allowed
+   ```
+7. **服务器内部错误（500）**
+   例如在handleRegister方法中直接抛出RuntimeException，并再次向/register发送请求
+   ```
+   //handleRegister方法:
+   private void handleRegister(String body) {
+        throw new RuntimeException("This is a test for 500 Internal Server Error!");
+   }
+   ```
+   ```
+   （handleRegister方法抛出RuntimeException）
+   请输入请求方法 (GET/POST): POST
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
+   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   ```
+   预期结果：
+   ```
+   发送请求到: http://localhost:8007/register
+
+   === 响应结果 ===
+   状态码: 500 Internal Server Error
+   响应头: {Connection=keep-alive, Content-Length=59, Content-Type=text/plain}
+   响应体:
+   Server Error: This is a test for 500 Internal Server Error!
+   ```
 
 
 ## 页面说明
