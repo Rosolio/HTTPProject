@@ -32,7 +32,7 @@ public class HttpClient {
             }
 
             // 读取用户输入的URL
-            System.out.print("请输入URL (例如: http://localhost:8080/index.html): ");
+            System.out.print("请输入URL (例如: http://localhost:8007/index.html): ");
             String url = scanner.nextLine().trim();
             if (url.isEmpty()) {
                 System.out.println("URL不能为空");
@@ -79,7 +79,7 @@ public class HttpClient {
         int slashIndex = urlWithoutProtocol.indexOf('/');
 
         if (colonIndex != -1 && (slashIndex == -1 || colonIndex < slashIndex)) {
-            // 包含端口（如 localhost:8080/path 或 localhost:8080）
+            // 包含端口（如 localhost:8007/path 或 localhost:8007）
             host = urlWithoutProtocol.substring(0, colonIndex);
             String portAndPath = urlWithoutProtocol.substring(colonIndex + 1);
             if (portAndPath.contains("/")) {
