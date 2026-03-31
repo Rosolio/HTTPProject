@@ -1,8 +1,11 @@
 package client;
 
 import java.io.*;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.util.Locale;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
@@ -135,40 +138,41 @@ public class HttpClient {
         while (redirectCount < MAX_REDIRECT) {
             System.out.println("\n发送请求到: " + currentUrl);
             try (Socket socket = new Socket(currentUrl.host, currentUrl.port)) {
-                // 构建请求
-                PrintWriter out = new PrintWriter(new BufferedWriter(
-                        new OutputStreamWriter(socket.getOutputStream())), true);
-                BufferedReader in = new BufferedReader(
-                        new InputStreamReader(socket.getInputStream()));
+                // 按字节发送/接收，避免 Content-Length 与字符集不一致
+                OutputStream rawOut = socket.getOutputStream();
+                InputStream rawIn = socket.getInputStream();
 
-                // 1. 发送请求行
-                out.println(method + " " + currentUrl.path + " HTTP/1.1");
+                byte[] bodyBytes = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
 
-                // 2. 发送请求头
-                out.println("Host: " + currentUrl.host + ":" + currentUrl.port);
-                out.println("Connection: close"); // 客户端使用短连接
+                // 1. 发送请求行 + 2. 发送请求头（ASCII）
+                StringBuilder request = new StringBuilder();
+                request.append(method).append(" ").append(currentUrl.path).append(" HTTP/1.1\r\n");
+                request.append("Host: ").append(currentUrl.host).append(":").append(currentUrl.port).append("\r\n");
+                request.append("Connection: close\r\n"); // 客户端使用短连接
                 if ("POST".equals(method)) {
-                    // POST请求需指定内容类型和长度
-                    out.println("Content-Type: application/x-www-form-urlencoded");
-                    out.println("Content-Length: " + body.getBytes().length);
+                    request.append("Content-Type: application/x-www-form-urlencoded\r\n");
+                    request.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
                 }
                 // 对GET请求添加缓存验证头（If-Modified-Since）
                 if ("GET".equals(method)) {
                     String cacheKey = currentUrl.toString();
-                    if (resourceCache.containsKey(cacheKey)) {
-                        out.println("If-Modified-Since: " + resourceCache.get(cacheKey));
+                    Long cached = resourceCache.get(cacheKey);
+                    if (cached != null) {
+                        request.append("If-Modified-Since: ").append(cached).append("\r\n");
                     }
                 }
-                out.println(); // 空行分隔头和体
+                request.append("\r\n"); // 空行分隔头和体
 
-                // 3. 发送POST请求体
-                if ("POST".equals(method) && !body.isEmpty()) {
-                    out.print(body);
-                    out.flush();
+                rawOut.write(request.toString().getBytes(StandardCharsets.US_ASCII));
+
+                // 3. 发送POST请求体（UTF-8 字节）
+                if ("POST".equals(method) && bodyBytes.length > 0) {
+                    rawOut.write(bodyBytes);
                 }
+                rawOut.flush();
 
                 // 4. 接收并解析响应
-                ResponseInfo response = parseResponse(in);
+                ResponseInfo response = parseResponse(rawIn);
                 System.out.println("\n=== 响应结果 ===");
                 System.out.println("状态码: " + response.statusCode + " " + response.statusMsg);
                 System.out.println("响应头: " + response.headers);
@@ -183,9 +187,9 @@ public class HttpClient {
                 if (response.statusCode == 200) {
                     System.out.println("响应体:\n" + response.body);
                     // 缓存Last-Modified（用于后续304判断）
-                    if (response.headers.containsKey("Last-Modified")) {
+                    if (response.headers.containsKey("last-modified")) {
                         try {
-                            long lastModified = Long.parseLong(response.headers.get("Last-Modified"));
+                            long lastModified = Long.parseLong(response.headers.get("last-modified"));
                             resourceCache.put(currentUrl.toString(), lastModified);
                         } catch (NumberFormatException e) {
                             // 忽略格式错误的Last-Modified
@@ -196,7 +200,7 @@ public class HttpClient {
 
                 // 处理301/302（重定向）
                 if (response.statusCode == 301 || response.statusCode == 302) {
-                    String location = response.headers.get("Location");
+                    String location = response.headers.get("location");
                     if (location == null || location.isEmpty()) {
                         System.out.println("重定向错误: 未找到Location头");
                         return;
@@ -228,11 +232,11 @@ public class HttpClient {
     }
 
     // 解析服务器响应（状态行、响应头、响应体）
-    private static ResponseInfo parseResponse(BufferedReader in) throws IOException {
+    private static ResponseInfo parseResponse(InputStream in) throws IOException {
         ResponseInfo response = new ResponseInfo();
 
         // 1. 解析状态行（如 HTTP/1.1 200 OK）
-        String statusLine = in.readLine();
+        String statusLine = readLine(in);
         if (statusLine == null) {
             throw new IOException("无效的响应");
         }
@@ -248,42 +252,109 @@ public class HttpClient {
 
         // 2. 解析响应头
         String headerLine;
-        while ((headerLine = in.readLine()) != null && !headerLine.isEmpty()) {
-            String[] headerParts = headerLine.split(": ", 2);
-            if (headerParts.length == 2) {
-                response.headers.put(headerParts[0], headerParts[1]);
+        while ((headerLine = readLine(in)) != null && !headerLine.isEmpty()) {
+            int idx = headerLine.indexOf(':');
+            if (idx > 0) {
+                String name = headerLine.substring(0, idx).trim().toLowerCase(Locale.ROOT);
+                String value = headerLine.substring(idx + 1).trim();
+                response.headers.put(name, value);
             }
         }
 
         // 3. 解析响应体（根据Content-Length读取）
-        if (response.headers.containsKey("Content-Length")) {
+        byte[] bodyBytes;
+        if (response.headers.containsKey("content-length")) {
             try {
-                int contentLength = Integer.parseInt(response.headers.get("Content-Length"));
-                char[] bodyChars = new char[contentLength];
-                int bytesRead = in.read(bodyChars, 0, contentLength);
-                if (bytesRead > 0) {
-                    response.body = new String(bodyChars, 0, bytesRead);
-                }
+                long contentLength = Long.parseLong(response.headers.get("content-length"));
+                bodyBytes = readFixedBytes(in, contentLength);
             } catch (NumberFormatException e) {
                 // 忽略格式错误的Content-Length，尝试读取所有内容
-                response.body = readRemaining(in);
+                bodyBytes = readRemainingBytes(in);
             }
         } else {
             // 无Content-Length时读取到流结束
-            response.body = readRemaining(in);
+            bodyBytes = readRemainingBytes(in);
+        }
+
+        // 4. 按内容类型决定如何展示响应体（文本/二进制）
+        if (bodyBytes.length == 0) {
+            response.body = "";
+        } else {
+            String contentType = response.headers.get("content-type");
+            boolean looksLikeText = false;
+            if (contentType != null) {
+                String ct = contentType.toLowerCase(Locale.ROOT);
+                looksLikeText = ct.startsWith("text/") || ct.contains("application/json") || ct.contains("application/xml")
+                        || ct.contains("text/html") || ct.contains("application/javascript");
+            }
+
+            if (looksLikeText) {
+                Charset charset = extractCharset(contentType);
+                response.body = new String(bodyBytes, charset != null ? charset : StandardCharsets.UTF_8);
+            } else {
+                response.body = "[Binary response: " + bodyBytes.length + " bytes]";
+            }
         }
 
         return response;
     }
 
-    // 读取输入流剩余内容（用于无Content-Length的情况）
-    private static String readRemaining(BufferedReader in) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        String line;
-        while ((line = in.readLine()) != null) {
-            sb.append(line).append("\n");
+    private static Charset extractCharset(String contentType) {
+        if (contentType == null) return null;
+        // Content-Type: text/html; charset=UTF-8
+        String[] parts = contentType.split(";");
+        for (String part : parts) {
+            String p = part.trim().toLowerCase(Locale.ROOT);
+            if (p.startsWith("charset=")) {
+                String charsetName = part.trim().substring("charset=".length()).trim();
+                try {
+                    return Charset.forName(charsetName);
+                } catch (Exception ignored) {
+                    return null;
+                }
+            }
         }
-        return sb.toString();
+        return null;
+    }
+
+    // 读取一行（以 CRLF 结束），并按 ISO-8859-1 解码为字符串
+    private static String readLine(InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+        int b;
+        while ((b = in.read()) != -1) {
+            if (b == '\n') break;
+            if (b == '\r') continue; // 过滤掉 CR
+            buffer.write(b);
+        }
+        if (b == -1 && buffer.size() == 0) return null;
+        return buffer.toString(StandardCharsets.ISO_8859_1);
+    }
+
+    private static byte[] readFixedBytes(InputStream in, long length) throws IOException {
+        if (length <= 0) return new byte[0];
+        if (length > Integer.MAX_VALUE) {
+            throw new IOException("Content-Length too large: " + length);
+        }
+        int remaining = (int) length;
+        byte[] data = new byte[remaining];
+        int offset = 0;
+        while (offset < remaining) {
+            int read = in.read(data, offset, remaining - offset);
+            if (read == -1) throw new EOFException("Unexpected EOF while reading response body");
+            offset += read;
+        }
+        return data;
+    }
+
+    // 读取输入流剩余内容（用于无Content-Length的情况）
+    private static byte[] readRemainingBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        byte[] buf = new byte[8192];
+        int len;
+        while ((len = in.read(buf)) != -1) {
+            baos.write(buf, 0, len);
+        }
+        return baos.toByteArray();
     }
 
     // 内部类：封装URL解析结果

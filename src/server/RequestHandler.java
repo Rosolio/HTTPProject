@@ -2,14 +2,15 @@ package server;
 
 import java.io.*;
 import java.net.Socket;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 public class RequestHandler implements Runnable {
     private final Socket clientSocket;
     private final UserService userService;
-    private BufferedReader in;
-    private PrintWriter out;
     private OutputStream dataOut;
 
     public RequestHandler(Socket socket, UserService userService) {
@@ -23,36 +24,36 @@ public class RequestHandler implements Runnable {
         Map<String, String> headers = new HashMap<>();
 
         try {
-            // 初始化输入输出流
-            in = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-            out = new PrintWriter(clientSocket.getOutputStream(), true);
+            // 按字节解析请求，避免 Content-Length/字符集不一致导致 POST/中文乱码
+            InputStream input = new BufferedInputStream(clientSocket.getInputStream());
             dataOut = clientSocket.getOutputStream();
 
             // 解析HTTP请求行（第一行：Method Path Protocol）
-            String requestLine = in.readLine();
+            String requestLine = readLine(input);
             if (requestLine == null) return;
             String[] reqParts = requestLine.split(" ");
             String method = reqParts[0]; // GET/POST
-            String path = reqParts[1];   // 请求路径（如/、/login、/register）
-            String protocol = reqParts[2]; // HTTP/1.1
+            String path = reqParts.length > 1 ? reqParts[1] : "/";   // 请求路径（如/、/login、/register）
+            String protocol = reqParts.length > 2 ? reqParts[2] : "HTTP/1.1"; // HTTP/1.1
 
             // 解析请求头（提取Connection判断长连接）
             // 注意：此处复用外部定义的 headers，不再重新声明
             String headerLine;
-            while ((headerLine = in.readLine()) != null && !headerLine.isEmpty()) {
-                String[] headerParts = headerLine.split(": ", 2);
-                if (headerParts.length == 2) {
-                    headers.put(headerParts[0], headerParts[1]);
+            while ((headerLine = readLine(input)) != null && !headerLine.isEmpty()) {
+                int idx = headerLine.indexOf(':');
+                if (idx > 0) {
+                    String name = headerLine.substring(0, idx).trim().toLowerCase(Locale.ROOT);
+                    String value = headerLine.substring(idx + 1).trim();
+                    headers.put(name, value);
                 }
             }
 
             // 处理POST请求体（注册/登录需获取表单数据）
             String requestBody = "";
-            if ("POST".equals(method) && headers.containsKey("Content-Length")) {
-                int contentLength = Integer.parseInt(headers.get("Content-Length"));
-                char[] bodyChars = new char[contentLength];
-                in.read(bodyChars);
-                requestBody = new String(bodyChars);
+            if ("POST".equals(method) && headers.containsKey("content-length")) {
+                long contentLength = Long.parseLong(headers.get("content-length"));
+                byte[] bodyBytes = readFixedBytes(input, contentLength);
+                requestBody = new String(bodyBytes, StandardCharsets.UTF_8);
             }
 
             // 路由请求（接口/静态资源）
@@ -64,19 +65,12 @@ public class RequestHandler implements Runnable {
         } finally {
             try {
                 // 长连接判断：此时 headers 已在外部初始化，可安全访问
-                if (!"keep-alive".equalsIgnoreCase(headers.getOrDefault("Connection", "close"))) {
+                if (!"keep-alive".equalsIgnoreCase(headers.getOrDefault("connection", "close"))) {
                     clientSocket.close();
                 }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            // 关闭流（避免资源泄漏）
-            try {
-                if (in != null) in.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            if (out != null) out.close();
             try {
                 if (dataOut != null) dataOut.close();
             } catch (IOException e) {
@@ -155,8 +149,14 @@ public class RequestHandler implements Runnable {
         // 根路径默认指向index.html
         if ("/".equals(path)) path = "/index.html";
         // 静态资源存放路径（项目根目录下的static文件夹）
-        String resourcePath = "static" + path;
-        File resourceFile = new File(resourcePath);
+        // 额外做一次路径规范化，避免 ../ 路径穿越读取静态目录外文件
+        File staticRoot = new File("static").getCanonicalFile();
+        File requested = new File(staticRoot, path.startsWith("/") ? path.substring(1) : path).getCanonicalFile();
+        if (!requested.getPath().startsWith(staticRoot.getPath())) {
+            sendResponse(protocol, 403, "Forbidden", "text/plain", "Forbidden", -1);
+            return;
+        }
+        File resourceFile = requested;
 
         // 404：资源不存在
         if (!resourceFile.exists() || !resourceFile.isFile()) {
@@ -165,7 +165,7 @@ public class RequestHandler implements Runnable {
         }
 
         // 304：资源未修改（根据If-Modified-Since判断）
-        String ifModifiedSince = headers.get("If-Modified-Since");
+        String ifModifiedSince = headers.get("if-modified-since");
         long lastModified = resourceFile.lastModified();
         if (ifModifiedSince != null && !ifModifiedSince.isEmpty()) {
             try {
@@ -183,8 +183,8 @@ public class RequestHandler implements Runnable {
 
         // 200：返回资源（带MIME类型、Last-Modified头）
         String mimeType = MimeUtils.getMimeType(path);
-        sendResponse(protocol, 200, "OK", mimeType, null, lastModified); // 传入lastModified
-        // 写入资源文件内容
+        sendStaticFileHeaders(protocol, 200, "OK", mimeType, resourceFile.length(), lastModified);
+        // 写入资源文件内容（按字节流式输出）
         try (FileInputStream fis = new FileInputStream(resourceFile)) {
             byte[] buffer = new byte[1024];
             int len;
@@ -197,11 +197,8 @@ public class RequestHandler implements Runnable {
 
     // 构建并发送HTTP响应
     private void sendResponse(String protocol, int statusCode, String statusMsg, String mimeType, String body, long lastModified) {
-        // 增加空指针判断
-        if (out == null) {
-            System.err.println("PrintWriter is null, cannot send response");
-            return;
-        }
+        byte[] bodyBytes = body == null ? new byte[0] : body.getBytes(StandardCharsets.UTF_8);
+
         // 1. 响应状态行
         StringBuilder response = new StringBuilder();
         response.append(protocol).append(" ").append(statusCode).append(" ").append(statusMsg).append("\r\n");
@@ -211,9 +208,8 @@ public class RequestHandler implements Runnable {
         if (mimeType != null) {
             response.append("Content-Type: ").append(mimeType).append("\r\n");
         }
-        if (body != null) {
-            response.append("Content-Length: ").append(body.getBytes().length).append("\r\n");
-        }
+        // 始终带 Content-Length，方便客户端按字节读取（包含 body=null 的情况）
+        response.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
         // 静态资源添加Last-Modified头（用于304判断）
         if (lastModified != -1) {
             response.append("Last-Modified: ").append(lastModified).append("\r\n"); // 纯数字毫秒
@@ -224,25 +220,49 @@ public class RequestHandler implements Runnable {
         response.append("\r\n");
 
         // 4. 响应体（如存在）
-        if (body != null) {
-            response.append(body);
+        byte[] headerBytes = response.toString().getBytes(StandardCharsets.UTF_8);
+        try {
+            dataOut.write(headerBytes);
+            if (bodyBytes.length > 0) {
+                dataOut.write(bodyBytes);
+            }
+            dataOut.flush();
+        } catch (IOException e) {
+            // 如果发送失败，这里只记录并让线程结束
+            e.printStackTrace();
         }
+    }
 
-        // 发送响应
-        out.print(response.toString());
-        out.flush();
+    private void sendStaticFileHeaders(String protocol, int statusCode, String statusMsg,
+                                        String mimeType, long contentLength, long lastModified) throws IOException {
+        StringBuilder response = new StringBuilder();
+        response.append(protocol).append(" ").append(statusCode).append(" ").append(statusMsg).append("\r\n");
+        response.append("Connection: keep-alive\r\n");
+        if (mimeType != null) {
+            response.append("Content-Type: ").append(mimeType).append("\r\n");
+        }
+        response.append("Content-Length: ").append(contentLength).append("\r\n");
+        if (lastModified != -1) {
+            response.append("Last-Modified: ").append(lastModified).append("\r\n");
+        }
+        response.append("\r\n");
+        dataOut.write(response.toString().getBytes(StandardCharsets.UTF_8));
+        dataOut.flush();
     }
 
     // 解析POST表单参数（username=xxx&password=xxx → Map）
     private Map<String, String> parseFormParams(String body) {
         Map<String, String> params = new HashMap<>();
         if (body.isEmpty()) return params;
-        String[] pairs = body.split("&");
+        String[] pairs = body.split("&", -1);
         for (String pair : pairs) {
+            if (pair.isEmpty()) continue;
             String[] keyVal = pair.split("=", 2);
-            if (keyVal.length == 2) {
-                params.put(keyVal[0], keyVal[1]);
-            }
+            String rawKey = keyVal.length >= 1 ? keyVal[0] : "";
+            String rawVal = keyVal.length == 2 ? keyVal[1] : "";
+            String key = URLDecoder.decode(rawKey, StandardCharsets.UTF_8);
+            String val = URLDecoder.decode(rawVal, StandardCharsets.UTF_8);
+            params.put(key, val);
         }
         return params;
     }
@@ -266,10 +286,43 @@ public class RequestHandler implements Runnable {
                 .append(statusCode == 301 ? "Moved Permanently" : "Found").append("\r\n");
         response.append("Location: ").append(location).append("\r\n"); // 重定向目标URL
         response.append("Connection: keep-alive\r\n"); // 保持长连接支持
+        response.append("Content-Length: 0\r\n");
         response.append("\r\n"); // 空行结束头部分
 
-        // 发送响应
-        out.print(response.toString());
-        out.flush();
+        try {
+            dataOut.write(response.toString().getBytes(StandardCharsets.UTF_8));
+            dataOut.flush();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    // 读取一行（以 CRLF 结束），并按 ISO-8859-1 解码为字符串
+    private static String readLine(InputStream in) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream(128);
+        int b;
+        while ((b = in.read()) != -1) {
+            if (b == '\n') break;
+            if (b == '\r') continue; // 过滤掉 CR
+            buffer.write(b);
+        }
+        if (b == -1 && buffer.size() == 0) return null;
+        return buffer.toString(StandardCharsets.ISO_8859_1);
+    }
+
+    private static byte[] readFixedBytes(InputStream in, long length) throws IOException {
+        if (length <= 0) return new byte[0];
+        if (length > Integer.MAX_VALUE) {
+            throw new IOException("Content-Length too large: " + length);
+        }
+        int remaining = (int) length;
+        byte[] data = new byte[remaining];
+        int offset = 0;
+        while (offset < remaining) {
+            int read = in.read(data, offset, remaining - offset);
+            if (read == -1) throw new EOFException("Unexpected EOF while reading request body");
+            offset += read;
+        }
+        return data;
     }
 }
