@@ -534,7 +534,7 @@
             document.getElementById(`tab-${tabName}`).classList.add('active');
         }
 
-        async function sendRequest() {
+        function sendRequest() {
             const url = document.getElementById('url').value.trim();
             const body = document.getElementById('body').value.trim();
             
@@ -550,54 +550,49 @@
 
             const startTime = performance.now();
 
-            try {
-                const options = {
-                    method: currentMethod,
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'Cache-Control': 'no-cache, no-store, must-revalidate',
-                        'Pragma': 'no-cache'
-                    },
-                    // 禁止自动跟随重定向，以便我们可以看到301/302响应
-                    redirect: 'manual',
-                    // 禁用缓存
-                    cache: 'no-store'
-                };
+            // 使用XMLHttpRequest代替fetch，可以正确获取所有状态码
+            const xhr = new XMLHttpRequest();
+            xhr.open(currentMethod, url, true);
+            
+            // 设置请求头
+            xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr.setRequestHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            xhr.setRequestHeader('Pragma', 'no-cache');
+            
+            // 禁止跟随重定向
+            xhr.followRedirects = false;
 
-                if (['POST', 'PUT', 'DELETE'].includes(currentMethod) && body) {
-                    options.body = body;
-                }
-
-                const response = await fetch(url, options);
+            xhr.onload = function() {
                 const endTime = performance.now();
                 const duration = Math.round(endTime - startTime);
 
-                // 获取响应头
+                // 解析响应头
                 const headers = {};
-                response.headers.forEach((value, key) => {
-                    headers[key] = value;
+                const headerLines = xhr.getAllResponseHeaders().split('\r\n');
+                headerLines.forEach(line => {
+                    const parts = line.split(': ');
+                    if (parts.length === 2) {
+                        headers[parts[0].toLowerCase()] = parts[1];
+                    }
                 });
 
                 // 获取响应体
-                let responseBody;
-                const contentType = response.headers.get('content-type');
+                let responseBody = xhr.responseText;
+                const contentType = xhr.getResponseHeader('Content-Type');
                 if (contentType && contentType.includes('image')) {
                     responseBody = '[Binary data: Image]';
-                } else {
-                    responseBody = await response.text();
                 }
 
                 // 计算大小
                 const size = new Blob([responseBody]).size;
 
                 // 调试信息
-                console.log('Response status:', response.status, response.statusText);
-                console.log('Response type:', response.type);
+                console.log('XHR Status:', xhr.status, xhr.statusText);
 
                 // 显示响应
                 displayResponse({
-                    status: response.status,
-                    statusText: response.statusText,
+                    status: xhr.status,
+                    statusText: xhr.statusText,
                     headers: headers,
                     body: responseBody,
                     time: duration,
@@ -608,25 +603,59 @@
                 addToHistory({
                     method: currentMethod,
                     url: url,
-                    status: response.status,
+                    status: xhr.status,
                     time: new Date().toLocaleTimeString()
                 });
 
-            } catch (error) {
-                const endTime = performance.now();
-                console.error('Request error:', error);
-                displayResponse({
-                    status: 0,
-                    statusText: 'Error',
-                    headers: {},
-                    body: `请求失败: ${error.message}\n\n请确保服务器已启动，并且URL正确。`,
-                    time: Math.round(endTime - startTime),
-                    size: 0
-                });
-            } finally {
+                // 恢复按钮状态
                 sendBtn.classList.remove('loading');
                 sendBtn.querySelector('.btn-text').textContent = '发送请求';
                 sendBtn.querySelector('.spinner').style.display = 'none';
+            };
+
+            xhr.onerror = function() {
+                const endTime = performance.now();
+                console.error('XHR Error');
+                displayResponse({
+                    status: 0,
+                    statusText: 'Network Error',
+                    headers: {},
+                    body: `请求失败: 网络错误\n\n请确保服务器已启动，并且URL正确。`,
+                    time: Math.round(endTime - startTime),
+                    size: 0
+                });
+
+                // 恢复按钮状态
+                sendBtn.classList.remove('loading');
+                sendBtn.querySelector('.btn-text').textContent = '发送请求';
+                sendBtn.querySelector('.spinner').style.display = 'none';
+            };
+
+            xhr.ontimeout = function() {
+                const endTime = performance.now();
+                displayResponse({
+                    status: 0,
+                    statusText: 'Timeout',
+                    headers: {},
+                    body: `请求超时`,
+                    time: Math.round(endTime - startTime),
+                    size: 0
+                });
+
+                // 恢复按钮状态
+                sendBtn.classList.remove('loading');
+                sendBtn.querySelector('.btn-text').textContent = '发送请求';
+                sendBtn.querySelector('.spinner').style.display = 'none';
+            };
+
+            // 设置超时
+            xhr.timeout = 30000;
+
+            // 发送请求
+            if (['POST', 'PUT', 'DELETE'].includes(currentMethod) && body) {
+                xhr.send(body);
+            } else {
+                xhr.send();
             }
         }
 
