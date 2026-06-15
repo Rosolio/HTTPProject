@@ -554,8 +554,14 @@
                 const options = {
                     method: currentMethod,
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    }
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache'
+                    },
+                    // 禁止自动跟随重定向，以便我们可以看到301/302响应
+                    redirect: 'manual',
+                    // 禁用缓存
+                    cache: 'no-store'
                 };
 
                 if (['POST', 'PUT', 'DELETE'].includes(currentMethod) && body) {
@@ -584,6 +590,10 @@
                 // 计算大小
                 const size = new Blob([responseBody]).size;
 
+                // 调试信息
+                console.log('Response status:', response.status, response.statusText);
+                console.log('Response type:', response.type);
+
                 // 显示响应
                 displayResponse({
                     status: response.status,
@@ -604,6 +614,7 @@
 
             } catch (error) {
                 const endTime = performance.now();
+                console.error('Request error:', error);
                 displayResponse({
                     status: 0,
                     statusText: 'Error',
