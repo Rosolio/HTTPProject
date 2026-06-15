@@ -18,19 +18,21 @@ public class HttpClient {
     private static final int MAX_REDIRECT = 3;
 
     public static void main(String[] args) {
-        System.out.println("=== HTTP Client (支持GET/POST) ===");
+        System.out.println("=== HTTP Client (支持GET/POST/PUT/DELETE) ===");
         System.out.println("输入 'q' 退出程序");
 
         while (true) {
             // 读取用户输入的请求方法
-            System.out.print("\n请输入请求方法 (GET/POST): ");
+            System.out.print("\n请输入请求方法 (GET/POST/PUT/DELETE): ");
             String method = scanner.nextLine().trim().toUpperCase();
             if ("Q".equals(method)) {
                 System.out.println("程序退出");
                 break;
             }
-            if (!"GET".equals(method) && !"POST".equals(method)) {
-                System.out.println("不支持的方法，请使用GET或POST");
+            if (!"GET".equals(method) && !"POST".equals(method) && 
+                !"PUT".equals(method) && !"DELETE".equals(method) && 
+                !"HEAD".equals(method)) {
+                System.out.println("不支持的方法，请使用GET/POST/PUT/DELETE/HEAD");
                 continue;
             }
 
@@ -49,10 +51,10 @@ public class HttpClient {
                 continue;
             }
 
-            // 处理POST请求体
+            // 处理POST/PUT请求体
             String requestBody = "";
-            if ("POST".equals(method)) {
-                System.out.print("请输入POST参数 (格式: username=xxx&password=xxx): ");
+            if ("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)) {
+                System.out.print("请输入参数 (格式: username=xxx&password=xxx): ");
                 requestBody = scanner.nextLine().trim();
             }
 
@@ -149,7 +151,7 @@ public class HttpClient {
                 request.append(method).append(" ").append(currentUrl.path).append(" HTTP/1.1\r\n");
                 request.append("Host: ").append(currentUrl.host).append(":").append(currentUrl.port).append("\r\n");
                 request.append("Connection: close\r\n"); // 客户端使用短连接
-                if ("POST".equals(method)) {
+                if ("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)) {
                     request.append("Content-Type: application/x-www-form-urlencoded\r\n");
                     request.append("Content-Length: ").append(bodyBytes.length).append("\r\n");
                 }
@@ -165,8 +167,8 @@ public class HttpClient {
 
                 rawOut.write(request.toString().getBytes(StandardCharsets.US_ASCII));
 
-                // 3. 发送POST请求体（UTF-8 字节）
-                if ("POST".equals(method) && bodyBytes.length > 0) {
+                // 3. 发送POST/PUT/DELETE请求体（UTF-8 字节）
+                if (("POST".equals(method) || "PUT".equals(method) || "DELETE".equals(method)) && bodyBytes.length > 0) {
                     rawOut.write(bodyBytes);
                 }
                 rawOut.flush();

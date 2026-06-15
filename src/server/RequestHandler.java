@@ -11,11 +11,13 @@ import java.util.Map;
 public class RequestHandler implements Runnable {
     private final Socket clientSocket;
     private final UserService userService;
+    private final int connectionId;
     private OutputStream dataOut;
 
-    public RequestHandler(Socket socket, UserService userService) {
+    public RequestHandler(Socket socket, UserService userService, int connectionId) {
         this.clientSocket = socket;
         this.userService = userService;
+        this.connectionId = connectionId;
     }
 
     @Override
@@ -61,20 +63,22 @@ public class RequestHandler implements Runnable {
 
         } catch (Exception e) {
             // 500 服务器内部错误
+            System.err.println("Connection #" + connectionId + " error: " + e.getMessage());
             sendResponse("HTTP/1.1", 500, "Internal Server Error", "text/plain", "Server Error: " + e.getMessage(), -1);
         } finally {
             try {
                 // 长连接判断：此时 headers 已在外部初始化，可安全访问
                 if (!"keep-alive".equalsIgnoreCase(headers.getOrDefault("connection", "close"))) {
                     clientSocket.close();
+                    System.out.println("Connection #" + connectionId + " closed");
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error closing connection #" + connectionId + ": " + e.getMessage());
             }
             try {
                 if (dataOut != null) dataOut.close();
             } catch (IOException e) {
-                e.printStackTrace();
+                System.err.println("Error closing output stream for connection #" + connectionId + ": " + e.getMessage());
             }
         }
     }
@@ -92,16 +96,37 @@ public class RequestHandler implements Runnable {
             sendRedirect(protocol, 302, "/temp-new.html"); // 临时重定向到/temp-new.html
             return;
         }
+        
         // 注册接口：POST /register
         if ("POST".equals(method) && "/register".equals(path)) {
             handleRegister(body);
             return;
         }
+        
         // 登录接口：POST /login
         if ("POST".equals(method) && "/login".equals(path)) {
             handleLogin(body);
             return;
         }
+        
+        // 用户更新接口：PUT /user
+        if ("PUT".equals(method) && "/user".equals(path)) {
+            handleUpdateUser(body);
+            return;
+        }
+        
+        // 用户删除接口：DELETE /user
+        if ("DELETE".equals(method) && "/user".equals(path)) {
+            handleDeleteUser(body);
+            return;
+        }
+        
+        // 用户列表接口：GET /users
+        if ("GET".equals(method) && "/users".equals(path)) {
+            handleGetUsers();
+            return;
+        }
+        
         // 静态资源请求（如GET /index.html、/image.jpg）
         handleStaticResource(method, path, protocol, headers);
     }
@@ -137,11 +162,52 @@ public class RequestHandler implements Runnable {
             sendResponse("HTTP/1.1", 401, "Unauthorized", "text/plain", "Login Failed: Invalid username or password", -1);
         }
     }
+    
+    // 处理用户更新：PUT /user
+    private void handleUpdateUser(String body) {
+        Map<String, String> params = parseFormParams(body);
+        String username = params.get("username");
+        String newPassword = params.get("newPassword");
+        
+        if (username == null || newPassword == null || username.isEmpty() || newPassword.isEmpty()) {
+            sendResponse("HTTP/1.1", 400, "Bad Request", "text/plain", "Username and newPassword are required", -1);
+            return;
+        }
+        
+        if (userService.updateUser(username, newPassword)) {
+            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "User updated successfully: " + username, -1);
+        } else {
+            sendResponse("HTTP/1.1", 404, "Not Found", "text/plain", "User not found: " + username, -1);
+        }
+    }
+    
+    // 处理用户删除：DELETE /user
+    private void handleDeleteUser(String body) {
+        Map<String, String> params = parseFormParams(body);
+        String username = params.get("username");
+        
+        if (username == null || username.isEmpty()) {
+            sendResponse("HTTP/1.1", 400, "Bad Request", "text/plain", "Username is required", -1);
+            return;
+        }
+        
+        if (userService.deleteUser(username)) {
+            sendResponse("HTTP/1.1", 200, "OK", "text/plain", "User deleted successfully: " + username, -1);
+        } else {
+            sendResponse("HTTP/1.1", 404, "Not Found", "text/plain", "User not found: " + username, -1);
+        }
+    }
+    
+    // 处理获取用户列表：GET /users
+    private void handleGetUsers() {
+        String userList = userService.getUserList();
+        sendResponse("HTTP/1.1", 200, "OK", "text/plain", userList, -1);
+    }
 
     // 处理静态资源（支持304缓存、404不存在、MIME类型）
     private void handleStaticResource(String method, String path, String protocol, Map<String, String> headers) throws IOException {
-        // 只支持GET请求获取静态资源，其他方法返回405
-        if (!"GET".equals(method)) {
+        // 支持GET和HEAD请求获取静态资源，其他方法返回405
+        if (!"GET".equals(method) && !"HEAD".equals(method)) {
             sendResponse(protocol, 405, "Method Not Allowed", "text/plain", "Method " + method + " Not Allowed", -1);
             return;
         }
@@ -184,6 +250,12 @@ public class RequestHandler implements Runnable {
         // 200：返回资源（带MIME类型、Last-Modified头）
         String mimeType = MimeUtils.getMimeType(path);
         sendStaticFileHeaders(protocol, 200, "OK", mimeType, resourceFile.length(), lastModified);
+        
+        // 如果是HEAD方法，只返回头部不返回内容
+        if ("HEAD".equals(method)) {
+            return;
+        }
+        
         // 写入资源文件内容（按字节流式输出）
         try (FileInputStream fis = new FileInputStream(resourceFile)) {
             byte[] buffer = new byte[1024];

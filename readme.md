@@ -31,7 +31,9 @@ HTTPProject/
 #### 1. 基础开发规范与协议支持
 - **无框架依赖**：完全基于 Java Socket API 编写，不使用 Netty 等第三方框架，符合作业底层开发要求。
 - **HTTP 协议兼容**：支持 HTTP/1.1 协议，核心实现 **长连接机制**（通过 `Connection: keep-alive` 头维持连接），减少连接建立与关闭的性能开销。
-- **请求方法支持**：兼容 GET、POST 两种核心请求方法，可正确解析 GET 路径参数、POST 表单参数（格式：`username=xxx&password=xxx`）。
+- **请求方法支持**：兼容 GET、POST、PUT、DELETE、HEAD 五种请求方法，可正确解析 GET 路径参数、POST/PUT/DELETE 表单参数（格式：`username=xxx&password=xxx`）。
+- **线程池管理**：使用 `ExecutorService` 线程池管理并发连接，提高服务器性能和资源利用率。
+- **密码安全**：用户密码使用 SHA-256 哈希算法加密存储，提高安全性。
 
 #### 2. 状态码完整实现（覆盖作业要求的7种）
 | 状态码 | 状态描述                | 触发场景与处理逻辑                                                                 |
@@ -46,9 +48,11 @@ HTTPProject/
 
 #### 3. MIME 类型支持（满足“至少3种+1种非文本”要求）
 - 支持类型及对应场景：
-   - `text/plain`：文本文件（如 `test.txt`）
-   - `text/html`：HTML 页面（如 `index.html`、`new.html`）
-   - `image/png`：图片文件（如 `njuLOGO.png`，非文本类型）
+   - **文本类型**：`text/html`、`text/plain`、`text/css`、`text/csv`、`text/markdown`
+   - **应用类型**：`application/javascript`、`application/json`、`application/xml`、`application/pdf`、`application/zip`
+   - **图片类型**：`image/jpeg`、`image/png`、`image/gif`、`image/svg+xml`、`image/webp`、`image/bmp`
+   - **字体类型**：`font/woff`、`font/woff2`、`font/ttf`、`font/otf`
+   - **音视频类型**：`audio/mpeg`、`video/mp4`、`video/x-msvideo`
 - 实现方式：通过 `MimeUtils` 工具类映射文件后缀与 MIME 类型，可灵活扩展更多类型。
 
 #### 4. 业务功能（注册登录接口）
@@ -61,6 +65,17 @@ HTTPProject/
    - 路径：`POST /login`
    - 参数：`username`（用户名）、`password`（密码）
    - 逻辑：验证用户名与密码是否匹配，匹配返回 200 欢迎信息，不匹配返回 401 未授权响应。
+- **用户更新接口**：
+   - 路径：`PUT /user`
+   - 参数：`username`（用户名）、`newPassword`（新密码）
+   - 逻辑：验证用户是否存在，存在则更新密码并返回 200 成功响应，不存在返回 404 错误。
+- **用户删除接口**：
+   - 路径：`DELETE /user`
+   - 参数：`username`（用户名）
+   - 逻辑：验证用户是否存在，存在则删除用户并返回 200 成功响应，不存在返回 404 错误。
+- **用户列表接口**：
+   - 路径：`GET /users`
+   - 逻辑：返回所有已注册用户的列表。
 
 #### 5. 缓存机制（配合304状态码）
 - 实现原理：基于 HTTP 协议的 `Last-Modified`（服务器响应头）与 `If-Modified-Since`（客户端请求头）机制。
@@ -72,7 +87,7 @@ HTTPProject/
 
 ### 二、客户端功能
 #### 1. 基础请求与响应处理
-- 支持构建标准 HTTP 请求报文（包含请求行、请求头、请求体），可发送 GET/POST 请求。
+- 支持构建标准 HTTP 请求报文（包含请求行、请求头、请求体），可发送 GET/POST/PUT/DELETE/HEAD 请求。
 - 响应呈现：通过命令行输出完整响应内容，包括状态码、响应头、响应体，满足“呈现响应报文”要求。
 
 #### 2. 专项状态码处理（301/302/304）
@@ -88,7 +103,7 @@ HTTPProject/
 - 自动携带请求头：再次请求已缓存资源时，自动在请求头添加 `If-Modified-Since`，触发服务器 304 逻辑。
 
 #### 4. 交互体验
-- 命令行引导：运行客户端后，依次提示输入“请求方法（GET/POST，输入 q 退出）”“请求 URL”“POST 参数（若为 POST 请求）”，操作简洁直观。
+- 命令行引导：运行客户端后，依次提示输入“请求方法（GET/POST/PUT/DELETE/HEAD，输入 q 退出）”“请求 URL”“参数（若为 POST/PUT/DELETE 请求）”，操作简洁直观。
 
 
 ## 使用方法
@@ -101,14 +116,26 @@ HTTPProject/
 2. 按命令行提示输入信息：
    - 示例1（GET 请求静态资源）：
      ```
-     请输入请求方法 (GET/POST): GET
+     请输入请求方法 (GET/POST/PUT/DELETE): GET
      请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/index.html
      ```
    - 示例2（POST 请求注册接口）：
      ```
-     请输入请求方法 (GET/POST): POST
+     请输入请求方法 (GET/POST/PUT/DELETE): POST
      请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
-     请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+     请输入参数 (格式: username=xxx&password=xxx): username=test&password=123456
+     ```
+   - 示例3（PUT 请求更新用户）：
+     ```
+     请输入请求方法 (GET/POST/PUT/DELETE): PUT
+     请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/user
+     请输入参数 (格式: username=xxx&password=xxx): username=test&newPassword=654321
+     ```
+   - 示例4（DELETE 请求删除用户）：
+     ```
+     请输入请求方法 (GET/POST/PUT/DELETE): DELETE
+     请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/user
+     请输入参数 (格式: username=xxx&password=xxx): username=test
      ```
 
 
@@ -116,7 +143,7 @@ HTTPProject/
 
 1. **访问静态资源（200/304）**
    ```
-   请输入请求方法 (GET/POST): GET
+   请输入请求方法 (GET/POST/PUT/DELETE): GET
    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/index.html
    ```
    客户端预期输出：
@@ -140,9 +167,9 @@ HTTPProject/
    ```
 2. **用户注册**
    ```
-   请输入请求方法 (GET/POST): POST
+   请输入请求方法 (GET/POST/PUT/DELETE): POST
    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
-   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   请输入参数 (格式: username=xxx&password=xxx): username=test&password=123456
    ```
    客户端预期输出：
    ```
@@ -156,9 +183,9 @@ HTTPProject/
    ```
 3. **用户登录**
    ```
-   请输入请求方法 (GET/POST): POST
+   请输入请求方法 (GET/POST/PUT/DELETE): POST
    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/login
-   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   请输入参数 (格式: username=xxx&password=xxx): username=test&password=123456
    ```
    客户端预期输出：
    ```
@@ -175,7 +202,7 @@ HTTPProject/
 
    ```
    //301
-   请输入请求方法 (GET/POST): GET
+   请输入请求方法 (GET/POST/PUT/DELETE): GET
    请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/old
    ```
    预期输出：
@@ -196,7 +223,7 @@ HTTPProject/
    ```
    ```
    //302
-   请输入请求方法 (GET/POST): GET
+   请输入请求方法 (GET/POST/PUT/DELETE): GET
    请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/temp
    ```
    预期输出：
@@ -217,7 +244,7 @@ HTTPProject/
    ```
 5. **访问不存在页面（404）**
    ```
-   请输入请求方法 (GET/POST): GET
+   请输入请求方法 (GET/POST/PUT/DELETE): GET
    请输入 URL (例如: http://localhost:8007/index.html): http://localhost:8007/nonexist.html
    ```
    客户端预期结果：
@@ -232,9 +259,9 @@ HTTPProject/
    ```
 6. **使用不支持的方法（405）**
    ```
-   请输入请求方法 (GET/POST): POST
+   请输入请求方法 (GET/POST/PUT/DELETE): POST
    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/test.txt
-   请输入POST参数 (格式: username=xxx&password=xxx): username=xxx&password=xxx
+   请输入参数 (格式: username=xxx&password=xxx): username=xxx&password=xxx
    ```
    客户端预期结果：
    ```
@@ -256,9 +283,9 @@ HTTPProject/
    ```
    ```
    （handleRegister方法抛出RuntimeException）
-   请输入请求方法 (GET/POST): POST
+   请输入请求方法 (GET/POST/PUT/DELETE): POST
    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/register
-   请输入POST参数 (格式: username=xxx&password=xxx): username=test&password=123456
+   请输入参数 (格式: username=xxx&password=xxx): username=test&password=123456
    ```
    预期结果：
    ```
@@ -270,6 +297,55 @@ HTTPProject/
    响应体:
    Server Error: This is a test for 500 Internal Server Error!
    ```
+8. **用户更新（PUT）**
+   ```
+   请输入请求方法 (GET/POST/PUT/DELETE): PUT
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/user
+   请输入参数 (格式: username=xxx&password=xxx): username=test&newPassword=654321
+   ```
+   预期结果：
+   ```
+   发送请求到: http://localhost:8007/user
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Content-Length=28, Content-Type=text/plain}
+   响应体:
+   User updated successfully: test
+   ```
+9. **用户删除（DELETE）**
+   ```
+   请输入请求方法 (GET/POST/PUT/DELETE): DELETE
+   请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/user
+   请输入参数 (格式: username=xxx&password=xxx): username=test
+   ```
+   预期结果：
+   ```
+   发送请求到: http://localhost:8007/user
+
+   === 响应结果 ===
+   状态码: 200 OK
+   响应头: {Connection=keep-alive, Content-Length=28, Content-Type=text/plain}
+   响应体:
+   User deleted successfully: test
+   ```
+10. **获取用户列表（GET）**
+    ```
+    请输入请求方法 (GET/POST/PUT/DELETE): GET
+    请输入URL (例如: http://localhost:8007/index.html): http://localhost:8007/users
+    ```
+    预期结果：
+    ```
+    发送请求到: http://localhost:8007/users
+
+    === 响应结果 ===
+    状态码: 200 OK
+    响应头: {Connection=keep-alive, Content-Length=45, Content-Type=text/plain}
+    响应体:
+    Registered users:
+    - test
+    - user1
+    ```
 
 
 ## 页面说明
